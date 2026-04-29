@@ -716,6 +716,15 @@
                     return;
                 }
                 renderResults(data);
+
+                // After a Replace all, refresh the table by re-running the
+                // same query as a search, so it reflects what's left to match
+                // (typically nothing). A short pause keeps the replacement
+                // summary readable before the search summary takes over.
+                if (data.mode === 'replace') {
+                    await new Promise(function (r) { setTimeout(r, 1500); });
+                    await run(true);
+                }
             } catch (e) {
                 showError(e.message || String(e));
             } finally {

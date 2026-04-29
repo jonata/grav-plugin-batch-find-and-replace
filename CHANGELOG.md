@@ -1,3 +1,10 @@
+# v0.0.2
+## 04/29/2026
+
+1. [](#improved)
+    * After a successful **Replace all**, the table is automatically refreshed by re-running the same query as a search, so the user can verify the post-replace state (typically empty). The replacement summary stays visible briefly before the search summary takes over.
+    * Added `media/demo.mp4` — a short screen recording of the plugin in action.
+
 # v0.0.1
 ## 04/29/2026
 
