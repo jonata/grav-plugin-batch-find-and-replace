@@ -1,0 +1,17 @@
+title: Batch Find and Replace
+'@extends':
+  type: default
+  context: blueprints://pages
+
+form:
+  fields:
+    tabs:
+      type: tabs
+      active: 1
+      fields:
+        content:
+          type: tab
+          title: PLUGIN_ADMIN.CONTENT
+          fields:
+            content:
+              type: hidden

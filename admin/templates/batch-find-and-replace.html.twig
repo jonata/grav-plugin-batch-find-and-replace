@@ -1,0 +1,732 @@
+{% extends 'partials/base.html.twig' %}
+
+{% set title = 'Batch Find and Replace' %}
+{% set separator = config.system.param_sep %}
+{% set run_url   = uri.addNonce(base_url_relative ~ '/batch-find-and-replace/task' ~ separator ~ 'batchReplaceRun', 'admin-form', 'admin-nonce') %}
+{% set line_url  = uri.addNonce(base_url_relative ~ '/batch-find-and-replace/task' ~ separator ~ 'batchReplaceLine', 'admin-form', 'admin-nonce') %}
+{% set pages_base = base_url_relative ~ '/pages' %}
+
+{% block titlebar %}
+    <div class="button-bar">
+        <a class="button" href="{{ admin_route('/') }}"><i class="fa fa-reply"></i> {{ "PLUGIN_ADMIN.BACK"|t }}</a>
+    </div>
+    <h1><i class="fa fa-fw fa-search"></i> Batch Find and Replace</h1>
+{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <style>
+        /* Layout: give the plugin's content area horizontal breathing room
+           and let the admin's own surface (light or dark) show through. */
+        .br-wrap { padding: 22px 32px 24px; max-width: 1280px; }
+        @media (max-width: 900px) { .br-wrap { padding: 18px 18px 18px; } }
+
+        /* Backup warning */
+        .br-warning {
+            background: #fff8e1;
+            color: #7a4f01;
+            border: 1px solid #e0b94a;
+            border-left: 6px solid #b91c1c;
+            padding: 12px 16px;
+            border-radius: 3px;
+            margin-bottom: 22px;
+            font-weight: 500;
+            line-height: 1.45;
+        }
+        .br-warning strong { color: #b91c1c; }
+        .br-warning-link {
+            display: inline-block; margin-left: 14px; padding: 4px 12px;
+            background: #b91c1c; color: #fff !important;
+            text-decoration: none; border-radius: 3px;
+            font-weight: 600; font-size: 12px; line-height: 1.4;
+            white-space: nowrap;
+        }
+        .br-warning-link:hover { background: #991717; color: #fff !important; }
+        .br-warning-link .fa { margin-right: 4px; }
+
+        /* Form: no panel background, just spacing */
+        .br-form { margin-bottom: 22px; }
+        .br-form .br-field { margin-bottom: 14px; width: 100%; }
+        .br-form label {
+            display: block; margin-bottom: 6px;
+            font-weight: 600; font-size: 13px;
+        }
+        .br-form input[type="text"] {
+            width: 100%; padding: 9px 11px; border-radius: 3px;
+            border: 1px solid rgba(127,127,127,0.4);
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            font-size: 13px; box-sizing: border-box;
+        }
+        .br-form input[type="text"]:focus {
+            outline: none; border-color: #4ea1ff;
+            box-shadow: 0 0 0 2px rgba(78,161,255,0.2);
+        }
+
+        .br-checkboxes {
+            display: flex; gap: 22px; flex-wrap: wrap; align-items: center;
+            margin: 4px 0 14px;
+        }
+        .br-checkboxes label {
+            display: inline-flex; align-items: center; gap: 6px;
+            cursor: pointer; font-weight: 500; font-size: 13px;
+            margin-bottom: 0;
+        }
+
+        .br-separator {
+            border: 0; border-top: 1px solid rgba(127,127,127,0.25);
+            margin: 18px 0; height: 0;
+        }
+        .br-separator-table { margin: 22px 0 18px; }
+
+        .br-actions {
+            display: flex; align-items: center; gap: 12px;
+            justify-content: flex-end; flex-wrap: wrap;
+        }
+        .br-actions-buttons { display: flex; gap: 10px; }
+        .br-actions .button.primary {
+            background: #b91c1c; color: #fff; border-color: #b91c1c;
+        }
+        .br-actions .button.primary:hover { background: #991717; border-color: #991717; }
+        .br-actions .button.secondary {
+            background: #5a6068; color: #fff; border-color: #5a6068;
+        }
+        .br-actions .button.secondary:hover { background: #474c53; border-color: #474c53; }
+        .br-status { font-size: 13px; margin-right: auto; opacity: 0.75; }
+
+        /* Results: no panel chrome — sits on the admin background */
+        .br-results {
+            margin-top: 32px; padding-top: 18px;
+            border-top: 1px solid rgba(127,127,127,0.3);
+        }
+        .br-results h3 { margin: 0 0 16px 0; font-size: 16px; font-weight: 600; }
+        .br-summary {
+            display: flex; gap: 28px; flex-wrap: wrap;
+            margin-bottom: 18px;
+            border-top: 1px solid rgba(127,127,127,0.25);
+            border-bottom: 1px solid rgba(127,127,127,0.25);
+            padding: 14px 0;
+        }
+        .br-summary .br-stat { display: flex; flex-direction: column; min-width: 110px; }
+        .br-summary .br-stat .br-stat-label {
+            display: block; background: none; border: 0; padding: 0; margin: 0;
+            font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+            opacity: 0.7; font-weight: 500; line-height: 1.4;
+        }
+        .br-summary .br-stat .br-stat-value {
+            display: block; font-size: 20px; font-weight: 600;
+            line-height: 1.2; margin-top: 2px;
+        }
+
+        /* Table: minimal, theme-neutral */
+        table.br-table {
+            width: 100%; border-collapse: collapse;
+            font-size: 13px; table-layout: fixed;
+            display: table !important;
+        }
+        table.br-table thead { display: table-header-group !important; }
+        table.br-table tbody { display: table-row-group !important; }
+        table.br-table tr    { display: table-row !important; }
+        table.br-table th, table.br-table td { display: table-cell !important; }
+
+        table.br-table col.col-path    { width: 26%; }
+        table.br-table col.col-count   { width: 84px; }
+        table.br-table col.col-line    { width: 60px; }
+        table.br-table col.col-excerpt { width: auto; }
+        table.br-table col.col-action  { width: 110px; }
+
+        table.br-table th, table.br-table td {
+            text-align: left; padding: 10px 12px;
+            vertical-align: top !important; word-break: break-word;
+            border: 0;
+        }
+        table.br-table th:first-child,
+        table.br-table td:first-child { padding-left: 0; }
+        table.br-table thead th {
+            font-weight: 600; font-size: 11px;
+            text-transform: uppercase; letter-spacing: 0.06em;
+            opacity: 0.7;
+            border-bottom: 2px solid rgba(127,127,127,0.35);
+            background: transparent;
+        }
+        table.br-table thead th.col-count { text-align: right; }
+        table.br-table thead th.col-line  { text-align: right; }
+
+        /* Group divider: a clear rule before each new file (not the very first) */
+        table.br-table tbody tr.is-first > td {
+            border-top: 1px solid rgba(127,127,127,0.35);
+            padding-top: 11px;
+        }
+        table.br-table tbody tr:first-child.is-first > td { border-top: 0; }
+        table.br-table tbody tr.is-cont > td.line-num,
+        table.br-table tbody tr.is-cont > td.excerpt {
+            border-top: 1px dashed rgba(127,127,127,0.18);
+        }
+
+        table.br-table td.path {
+            font-family: 'SFMono-Regular', Consolas, monospace;
+            font-size: 12px; line-height: 1.45;
+            vertical-align: top;
+        }
+        table.br-table td.path .path-dir  { opacity: 0.55; font-weight: 400; }
+        table.br-table td.path .path-file { font-weight: 700; color: #2563eb; }
+        table.br-table td.path .path-link {
+            text-decoration: none; color: inherit;
+            word-break: break-all;
+        }
+        table.br-table td.path .path-link:hover .path-file { text-decoration: underline; }
+        table.br-table td.path .path-link-icon {
+            font-size: 10px; opacity: 0.4; margin-left: 4px;
+        }
+        table.br-table td.path .path-link:hover .path-link-icon { opacity: 0.8; }
+
+        table.br-table td.count {
+            text-align: right; padding-right: 16px; vertical-align: top;
+        }
+        table.br-table td.count .count-pill {
+            display: inline-block; min-width: 28px; padding: 2px 10px;
+            background: #e7f6ec; color: #1f7a3a;
+            border: 1px solid #b6e0c5; border-radius: 11px;
+            font-weight: 600; font-size: 12px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        table.br-table td.line-num {
+            text-align: right; padding-right: 14px;
+            font-variant-numeric: tabular-nums; font-size: 12px;
+            font-family: 'SFMono-Regular', Consolas, monospace;
+            opacity: 0.6; vertical-align: top;
+        }
+
+        table.br-table td.excerpt {
+            font-family: 'SFMono-Regular', Consolas, monospace;
+            white-space: pre-wrap; line-height: 1.55; font-size: 12.5px;
+            vertical-align: top;
+        }
+        table.br-table td.excerpt mark.br-hl {
+            background: #fff2a8; color: #5a4a00;
+            border-radius: 2px; padding: 0 2px;
+            font-weight: 700;
+        }
+        table.br-table td.action { text-align: right; vertical-align: top; }
+        table.br-table td.action .br-row-replace {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: #b91c1c; color: #fff; border: 1px solid #b91c1c;
+            border-radius: 3px; padding: 5px 12px;
+            font-size: 12px; font-weight: 600;
+            cursor: pointer; line-height: 1.2; white-space: nowrap;
+        }
+        table.br-table td.action .br-row-replace:hover { background: #991717; border-color: #991717; }
+        table.br-table td.action .br-row-replace[disabled] {
+            opacity: 0.5; cursor: not-allowed;
+        }
+        table.br-table td.action .br-row-result {
+            font-size: 11px; color: #1f7a3a; font-weight: 600;
+            transition: opacity 0.6s ease-in-out;
+        }
+        table.br-table td.action .br-row-result.is-error {
+            color: #b91c1c; font-weight: 500; transition: none;
+        }
+        table.br-table td.action .br-row-result.fade-out { opacity: 0; }
+        table.br-table tbody tr:hover > td { background: rgba(127,127,127,0.06); }
+        table.br-table tbody tr.is-replaced > td {
+            background: rgba(93, 217, 124, 0.18);
+            transition: opacity 0.5s ease-in-out, background-color 0.5s ease-in-out;
+        }
+        table.br-table tbody tr.is-replaced.fade-out > td {
+            opacity: 0;
+        }
+
+        /* Hide the row-replace button + action column when search-only is on */
+        .br-search-only-mode table.br-table col.col-action,
+        .br-search-only-mode table.br-table th.col-action,
+        .br-search-only-mode table.br-table td.action { display: none !important; }
+
+        .br-error-list {
+            background: #fdecec; color: #7a1c1c;
+            border: 1px solid #f3b6b6;
+            border-radius: 3px; padding: 10px 14px;
+            margin: 14px 0; font-size: 13px;
+        }
+        .br-error-list ul { margin: 6px 0 0 18px; padding: 0; }
+        .br-truncated {
+            margin-top: 8px; font-style: italic; font-size: 13px;
+            color: #b45309;
+        }
+        .br-spinner {
+            display: inline-block; width: 14px; height: 14px;
+            border: 2px solid currentColor; border-top-color: transparent;
+            border-radius: 50%; animation: br-spin 1s linear infinite;
+            margin-right: 8px; vertical-align: middle; opacity: 0.7;
+        }
+        @keyframes br-spin { to { transform: rotate(360deg); } }
+        .br-empty { padding: 20px; text-align: center; opacity: 0.6; font-style: italic; }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="br-wrap">
+    <div class="br-warning" role="alert">
+        <strong>⚠️ WARNING:</strong> This plugin modifies page files directly.
+        Please make a full backup of your <code>user/pages/</code> directory before proceeding.
+        <strong>There is no undo.</strong>
+        <a href="{{ admin_route('/tools/backups') }}" class="br-warning-link">
+            <i class="fa fa-archive"></i> Open Backup Manager
+        </a>
+    </div>
+
+    <form id="br-form" class="br-form" onsubmit="return false;">
+        {{ nonce_field('admin-form', 'admin-nonce')|raw }}
+
+        <div class="br-field">
+            <label for="br-find">Find <span style="color:#b91c1c">*</span></label>
+            <input type="text" id="br-find" name="find" autocomplete="off" spellcheck="false" required placeholder="Text or regex pattern (without delimiters)">
+        </div>
+
+        <div class="br-checkboxes">
+            <label><input type="checkbox" id="br-use-regex" name="use_regex"> Use Regex</label>
+            <label><input type="checkbox" id="br-case-sensitive" name="case_sensitive"> Case Sensitive</label>
+            <label><input type="checkbox" id="br-search-only" name="search_only" checked> Search Only (no replace)</label>
+        </div>
+
+        <div class="br-actions br-actions-search">
+            <span id="br-status" class="br-status"></span>
+            <div class="br-actions-buttons">
+                <button type="button" id="br-search" class="button secondary" title="Always runs Find-only (read-only). Ignores the &quot;Search Only&quot; checkbox."><i class="fa fa-search"></i> Search</button>
+            </div>
+        </div>
+
+        <hr class="br-separator" id="br-separator">
+
+        <div class="br-field" id="br-replace-field">
+            <label for="br-replace">Replace with</label>
+            <input type="text" id="br-replace" name="replace" autocomplete="off" spellcheck="false" placeholder="Leave empty to delete matches">
+        </div>
+
+        <div class="br-actions" id="br-run-actions">
+            <div class="br-actions-buttons">
+                <button type="button" id="br-run" class="button primary"><i class="fa fa-exchange"></i> Replace all</button>
+            </div>
+        </div>
+    </form>
+
+    <div id="br-results-wrap" style="display:none;">
+        <div class="br-results">
+            <h3 id="br-results-title" style="margin-top:0;">Results</h3>
+            <div id="br-summary" class="br-summary"></div>
+            <div id="br-truncated-notice" class="br-truncated" style="display:none;"></div>
+            <div id="br-errors"></div>
+            <hr class="br-separator br-separator-table">
+            <div id="br-table-wrap"></div>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        var RUN_URL    = {{ run_url|json_encode|raw }};
+        var LINE_URL   = {{ line_url|json_encode|raw }};
+        var PAGES_BASE = {{ pages_base|json_encode|raw }};
+        var MAX_DISPLAY = {{ bfr_max_results|default(500) }};
+
+        var $find        = document.getElementById('br-find');
+        var $replace     = document.getElementById('br-replace');
+        var $useRegex    = document.getElementById('br-use-regex');
+        var $caseSens    = document.getElementById('br-case-sensitive');
+        var $searchOnly  = document.getElementById('br-search-only');
+        var $runBtn      = document.getElementById('br-run');
+        var $searchBtn   = document.getElementById('br-search');
+        var $status      = document.getElementById('br-status');
+        var $form        = document.getElementById('br-form');
+        var $resultsWrap = document.getElementById('br-results-wrap');
+        var $title       = document.getElementById('br-results-title');
+        var $summary     = document.getElementById('br-summary');
+        var $errors      = document.getElementById('br-errors');
+        var $truncated   = document.getElementById('br-truncated-notice');
+        var $tableWrap   = document.getElementById('br-table-wrap');
+        var $replaceField = document.getElementById('br-replace-field');
+        var $runActions   = document.getElementById('br-run-actions');
+        var $separator    = document.getElementById('br-separator');
+
+        function syncReplaceVisibility() {
+            var hide = $searchOnly.checked;
+            $replaceField.style.display = hide ? 'none' : '';
+            $runActions.style.display   = hide ? 'none' : '';
+            $separator.style.display    = hide ? 'none' : '';
+            document.body.classList.toggle('br-search-only-mode', hide);
+        }
+        $searchOnly.addEventListener('change', syncReplaceVisibility);
+        syncReplaceVisibility();
+
+        function escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        /** Escape, then convert server-side highlight sentinels to <mark> tags. */
+        function escapeWithHighlight(s) {
+            return escapeHtml(s)
+                .replace(/\u0001/g, '<mark class="br-hl">')
+                .replace(/\u0002/g, '</mark>');
+        }
+
+        function setBusy(busy, label) {
+            $runBtn.disabled = busy;
+            $searchBtn.disabled = busy;
+            if (busy) {
+                $status.innerHTML = '<span class="br-spinner"></span>' + escapeHtml(label || 'Working…');
+            } else {
+                $status.textContent = label || '';
+            }
+        }
+
+        function renderSummary(mode, summary, elapsed) {
+            var stats;
+            if (mode === 'search') {
+                stats = [
+                    ['Files scanned',       summary.files_scanned || 0],
+                    ['Files with matches',  summary.files_with_matches || 0],
+                    ['Total matches',       summary.total_matches || 0],
+                    ['Elapsed',             (elapsed || 0) + ' ms']
+                ];
+                $title.textContent = 'Search results';
+            } else {
+                stats = [
+                    ['Files scanned',     summary.files_scanned || 0],
+                    ['Files modified',    summary.files_modified || 0],
+                    ['Total replacements', summary.total_replacements || 0],
+                    ['Elapsed',           (elapsed || 0) + ' ms']
+                ];
+                $title.textContent = 'Replacement results';
+            }
+            $summary.innerHTML = stats.map(function (s) {
+                return '<div class="br-stat"><span class="br-stat-label">' + escapeHtml(s[0]) +
+                    '</span><span class="br-stat-value">' + escapeHtml(s[1]) + '</span></div>';
+            }).join('');
+        }
+
+        function renderErrors(errors) {
+            if (!errors || !errors.length) { $errors.innerHTML = ''; return; }
+            var html = '<div class="br-error-list"><strong>' + errors.length + ' warning' +
+                (errors.length === 1 ? '' : 's') + ':</strong><ul>';
+            errors.forEach(function (e) { html += '<li>' + escapeHtml(e) + '</li>'; });
+            html += '</ul></div>';
+            $errors.innerHTML = html;
+        }
+
+        /**
+         * Convert a "user/pages/01.home/02.devtoys/item.md"-style path into the
+         * admin's page-edit route ("/01.home/02.devtoys"). Returns null when
+         * the path doesn't look like a page file. Numeric folder prefixes are
+         * preserved — Grav's admin resolves them server-side.
+         */
+        function pageEditRouteFromPath(p) {
+            if (!p) return null;
+            var s = String(p).replace(/^user\/pages\/?/, '');
+            var lastSlash = s.lastIndexOf('/');
+            if (lastSlash === -1) return null; // file directly under user/pages — has no editable route
+            var dir = s.substring(0, lastSlash);
+            if (!dir) return null;
+            return '/' + dir;
+        }
+
+        function formatPath(p) {
+            var s = String(p == null ? '' : p);
+            var idx = s.lastIndexOf('/');
+            var inner;
+            if (idx === -1) {
+                inner = '<span class="path-file">' + escapeHtml(s) + '</span>';
+            } else {
+                inner = '<span class="path-dir">' + escapeHtml(s.substring(0, idx + 1)) + '</span>' +
+                    '<span class="path-file">' + escapeHtml(s.substring(idx + 1)) + '</span>';
+            }
+            var route = pageEditRouteFromPath(s);
+            if (!route) return inner;
+            return '<a class="path-link" href="' + escapeHtml(PAGES_BASE + route) +
+                '" target="_blank" rel="noopener" title="Edit this page in a new tab">' +
+                inner + '<i class="fa fa-external-link path-link-icon"></i></a>';
+        }
+
+        function renderTable(mode, files) {
+            if (!files || !files.length) {
+                $tableWrap.innerHTML = '<div class="br-empty">No matches found.</div>';
+                return;
+            }
+            var countLabel = mode === 'search' ? 'Matches' : 'Replacements';
+            var html = '<table class="br-table">' +
+                '<colgroup>' +
+                '<col class="col-path">' +
+                '<col class="col-count">' +
+                '<col class="col-line">' +
+                '<col class="col-excerpt">' +
+                '<col class="col-action">' +
+                '</colgroup>' +
+                '<thead><tr>' +
+                '<th class="col-path">File</th>' +
+                '<th class="col-count">' + escapeHtml(countLabel) + '</th>' +
+                '<th class="col-line">Line</th>' +
+                '<th class="col-excerpt">Excerpt</th>' +
+                '<th class="col-action"></th>' +
+                '</tr></thead><tbody>';
+            files.forEach(function (f) {
+                var lines = f.lines || [];
+                var countCell = '<span class="count-pill">' + escapeHtml(f.count) + '</span>';
+                if (lines.length === 0) {
+                    html += '<tr class="is-first">' +
+                        '<td class="path">' + formatPath(f.path) + '</td>' +
+                        '<td class="count">' + countCell + '</td>' +
+                        '<td class="line-num"></td>' +
+                        '<td class="excerpt"><em>(no line context shown)</em></td>' +
+                        '<td class="action"></td></tr>';
+                    return;
+                }
+                lines.forEach(function (ln, idx) {
+                    var firstOfGroup = idx === 0;
+                    html += '<tr class="' + (firstOfGroup ? 'is-first' : 'is-cont') + '"' +
+                        ' data-path="' + escapeHtml(f.path) + '"' +
+                        ' data-line="' + escapeHtml(ln.line) + '">' +
+                        '<td class="path">' + (firstOfGroup ? formatPath(f.path) : '') + '</td>' +
+                        '<td class="count">' + (firstOfGroup ? countCell : '') + '</td>' +
+                        '<td class="line-num">' + escapeHtml(ln.line) + '</td>' +
+                        '<td class="excerpt">' + escapeWithHighlight(ln.excerpt) + '</td>' +
+                        '<td class="action"><button type="button" class="br-row-replace" title="Replace this single occurrence"><i class="fa fa-exchange"></i> Replace</button></td>' +
+                        '</tr>';
+                });
+            });
+            html += '</tbody></table>';
+            $tableWrap.innerHTML = html;
+            wireRowReplaceButtons();
+        }
+
+        async function replaceOneRow(tr) {
+            var btn = tr.querySelector('.br-row-replace');
+            if (!btn) return;
+            var path = tr.getAttribute('data-path');
+            var line = parseInt(tr.getAttribute('data-line'), 10);
+            var find = $find.value;
+            if (!find) { showError('Find field is empty.'); return; }
+
+            var replace = $replace.value;
+
+            btn.disabled = true;
+            btn.textContent = '…';
+            var actionCell = tr.querySelector('td.action');
+
+            try {
+                var fd = new FormData();
+                var nonceEl = document.querySelector('input[name="admin-nonce"]');
+                if (nonceEl) fd.append('admin-nonce', nonceEl.value);
+                fd.append('path', path);
+                fd.append('line', String(line));
+                fd.append('find', find);
+                fd.append('replace', replace);
+                fd.append('use_regex',      $useRegex.checked  ? '1' : '');
+                fd.append('case_sensitive', $caseSens.checked  ? '1' : '');
+
+                var resp = await fetch(LINE_URL, {
+                    method: 'POST', body: fd,
+                    credentials: 'same-origin',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                var data = await resp.json();
+                if (!data.success) {
+                    actionCell.innerHTML = '<span class="br-row-result is-error">' +
+                        escapeHtml(data.error || 'Failed.') + '</span>';
+                    return;
+                }
+                tr.classList.add('is-replaced');
+                var ex = tr.querySelector('td.excerpt');
+                var remaining = (data.remaining_in_line | 0);
+
+                // Always update the excerpt to reflect what's now on disk,
+                // re-applying highlights for any remaining matches.
+                if (ex && data.excerpt != null) {
+                    ex.innerHTML = escapeWithHighlight(data.excerpt);
+                }
+
+                actionCell.innerHTML = '<span class="br-row-result">✓ replaced</span>';
+
+                if (remaining > 0) {
+                    // Row stays — there are more matches on this line.
+                    // Just decrement the file's count pill and restore the button.
+                    decrementGroupCount(tr);
+                    setTimeout(function () {
+                        tr.classList.remove('is-replaced');
+                        actionCell.innerHTML = '<button type="button" class="br-row-replace" ' +
+                            'title="Replace this single occurrence">' +
+                            '<i class="fa fa-exchange"></i> Replace</button>';
+                        var newBtn = actionCell.querySelector('.br-row-replace');
+                        if (newBtn) newBtn.addEventListener('click', function () {
+                            replaceOneRow(tr);
+                        });
+                    }, 900);
+                } else {
+                    // No remaining matches on this line — fade and remove.
+                    setTimeout(function () { tr.classList.add('fade-out'); }, 800);
+                    setTimeout(function () { removeReplacedRow(tr); }, 1400);
+                }
+            } catch (e) {
+                actionCell.innerHTML = '<span class="br-row-result is-error">' +
+                    escapeHtml(e.message || String(e)) + '</span>';
+            }
+        }
+
+        function wireRowReplaceButtons() {
+            $tableWrap.querySelectorAll('.br-row-replace').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var tr = btn.closest('tr');
+                    if (tr) replaceOneRow(tr);
+                });
+            });
+        }
+
+        /**
+         * Remove a row after a successful per-line replace, keeping the rest
+         * of its file group consistent: decrement the file's count pill, and
+         * if this row was the group's "is-first" cell (carrying the path and
+         * count), promote the next sibling in the same group.
+         */
+        function removeReplacedRow(tr) {
+            var path     = tr.getAttribute('data-path');
+            var wasFirst = tr.classList.contains('is-first');
+
+            // Find the next row in the same file group (same path), if any.
+            var next = tr.nextElementSibling;
+            var nextInGroup = (next && next.getAttribute('data-path') === path) ? next : null;
+
+            // Decrement the count pill on the row that currently owns it.
+            var countOwner = wasFirst ? tr : findGroupHeader(tr);
+            if (countOwner) {
+                var pill = countOwner.querySelector('.count-pill');
+                if (pill) {
+                    var n = parseInt(pill.textContent, 10);
+                    if (!isNaN(n) && n > 1) {
+                        pill.textContent = String(n - 1);
+                    }
+                }
+            }
+
+            if (wasFirst && nextInGroup) {
+                // Promote the next continuation row to is-first.
+                nextInGroup.classList.remove('is-cont');
+                nextInGroup.classList.add('is-first');
+                var nextPath  = nextInGroup.querySelector('td.path');
+                var nextCount = nextInGroup.querySelector('td.count');
+                var prevPath  = tr.querySelector('td.path');
+                var prevCount = tr.querySelector('td.count');
+                if (nextPath  && prevPath)  nextPath.innerHTML  = prevPath.innerHTML;
+                if (nextCount && prevCount) nextCount.innerHTML = prevCount.innerHTML;
+            }
+
+            tr.parentNode && tr.parentNode.removeChild(tr);
+
+            // If the table is now empty, replace it with the empty state.
+            var anyRow = $tableWrap.querySelector('table.br-table tbody tr');
+            if (!anyRow) {
+                $tableWrap.innerHTML = '<div class="br-empty">All matches replaced.</div>';
+            }
+        }
+
+        /**
+         * Decrement the file group's count pill by 1 (clamped at 1).
+         * The pill always lives on whichever row currently has is-first.
+         */
+        function decrementGroupCount(tr) {
+            var header = tr.classList.contains('is-first') ? tr : findGroupHeader(tr);
+            if (!header) return;
+            var pill = header.querySelector('.count-pill');
+            if (!pill) return;
+            var n = parseInt(pill.textContent, 10);
+            if (!isNaN(n) && n > 1) pill.textContent = String(n - 1);
+        }
+
+        function findGroupHeader(tr) {
+            var path = tr.getAttribute('data-path');
+            var prev = tr.previousElementSibling;
+            while (prev && prev.getAttribute('data-path') === path) {
+                if (prev.classList.contains('is-first')) return prev;
+                prev = prev.previousElementSibling;
+            }
+            return null;
+        }
+
+        function renderResults(payload) {
+            $resultsWrap.style.display = '';
+            renderSummary(payload.mode, payload.summary || {}, payload.elapsed_ms);
+            renderErrors(payload.errors || []);
+            if (payload.summary && payload.summary.truncated) {
+                $truncated.style.display = '';
+                $truncated.textContent = 'Display truncated to ' + MAX_DISPLAY +
+                    ' lines. The actual operation processed all matches.';
+            } else {
+                $truncated.style.display = 'none';
+            }
+            renderTable(payload.mode, payload.files || []);
+        }
+
+        function showError(msg) {
+            $resultsWrap.style.display = '';
+            $title.textContent = 'Error';
+            $summary.innerHTML = '';
+            $truncated.style.display = 'none';
+            $tableWrap.innerHTML = '';
+            $errors.innerHTML = '<div class="br-error-list"><strong>Error:</strong> ' +
+                escapeHtml(msg) + '</div>';
+        }
+
+        async function run(forceSearchOnly) {
+            var find = $find.value;
+            if (!find) { $find.focus(); return; }
+
+            var searchOnly = forceSearchOnly === true || $searchOnly.checked;
+
+            if (!searchOnly) {
+                var msg = '⚠️ WARNING: This will modify page files directly.\n\n' +
+                    'There is no undo. Have you backed up user/pages/?\n\n' +
+                    'Press OK to proceed with the replacement.';
+                if (!window.confirm(msg)) { return; }
+            }
+
+            setBusy(true, searchOnly ? 'Scanning files…' : 'Replacing in files…');
+
+            var fd = new FormData($form);
+            // Normalize checkbox values: only present when checked.
+            ['use_regex', 'case_sensitive'].forEach(function (k) {
+                fd.set(k, document.getElementById('br-' + k.replace(/_/g, '-')).checked ? '1' : '');
+            });
+            fd.set('search_only', searchOnly ? '1' : '');
+
+            try {
+                var resp = await fetch(RUN_URL, {
+                    method: 'POST',
+                    body: fd,
+                    credentials: 'same-origin',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                var ct = resp.headers.get('content-type') || '';
+                if (!ct.includes('application/json')) {
+                    var text = await resp.text();
+                    showError('Unexpected response (HTTP ' + resp.status + '). ' +
+                        'See browser console for details.');
+                    console.error('Batch Replace non-JSON response:', text);
+                    return;
+                }
+                var data = await resp.json();
+                if (!data.success) {
+                    showError(data.error || 'Operation failed.');
+                    return;
+                }
+                renderResults(data);
+            } catch (e) {
+                showError(e.message || String(e));
+            } finally {
+                setBusy(false, '');
+            }
+        }
+
+        $runBtn.addEventListener('click', function () { run(false); });
+        $searchBtn.addEventListener('click', function () { run(true); });
+        $form.addEventListener('submit', function (e) { e.preventDefault(); run(false); });
+    })();
+    </script>
+</div>
+{% endblock %}

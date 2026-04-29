@@ -1,0 +1,51 @@
+name: Batch Find and Replace
+version: 0.0.1
+description: "Batch find and replace tool for Grav pages. Allows administrators to search and replace text, exact strings, or regex patterns across all .md page files."
+icon: search
+author:
+  name: Jonata
+  email: jbopen@gmail.com
+homepage: https://github.com/jonata/grav-plugin-batch-find-and-replace
+keywords: grav, plugin, admin, batch, replace, find, search, regex
+bugs: https://github.com/jonata/grav-plugin-batch-find-and-replace/issues
+license: MIT
+
+dependencies:
+  - { name: grav, version: '>=1.7.0' }
+  - { name: admin, version: '>=1.10.0' }
+
+form:
+  validation: strict
+  fields:
+    enabled:
+      type: toggle
+      label: PLUGIN_ADMIN.PLUGIN_STATUS
+      highlight: 1
+      default: 1
+      options:
+        1: PLUGIN_ADMIN.ENABLED
+        0: PLUGIN_ADMIN.DISABLED
+      validate:
+        type: bool
+
+    max_results:
+      type: text
+      label: Maximum Results to Display
+      description: "Maximum number of matching lines shown in the report (default 500). Files are still processed beyond this limit."
+      default: 500
+      validate:
+        type: int
+        min: 10
+        max: 10000
+
+    log_operations:
+      type: toggle
+      label: Log Operations
+      description: "Log all batch replace operations to Grav's log system."
+      highlight: 1
+      default: 1
+      options:
+        1: PLUGIN_ADMIN.YES
+        0: PLUGIN_ADMIN.NO
+      validate:
+        type: bool
