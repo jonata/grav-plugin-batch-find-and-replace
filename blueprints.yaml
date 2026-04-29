@@ -1,4 +1,6 @@
 name: Batch Find and Replace
+slug: batch-find-and-replace
+type: plugin
 version: 0.0.1
 description: "Batch find and replace tool for Grav pages. Allows administrators to search and replace text, exact strings, or regex patterns across all .md page files."
 icon: search
@@ -8,6 +10,7 @@ author:
 homepage: https://github.com/jonata/grav-plugin-batch-find-and-replace
 keywords: grav, plugin, admin, batch, replace, find, search, regex
 bugs: https://github.com/jonata/grav-plugin-batch-find-and-replace/issues
+docs: https://github.com/jonata/grav-plugin-batch-find-and-replace/blob/main/README.md
 license: MIT
 
 dependencies:

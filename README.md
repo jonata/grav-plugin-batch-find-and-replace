@@ -30,6 +30,8 @@ A Grav CMS admin plugin that lets administrators **find and/or replace** text, e
        batch-find-and-replace.yaml
        blueprints.yaml
        README.md
+       CHANGELOG.md
+       LICENSE
        classes/BatchReplaceTool.php
        admin/blueprints/batch-find-and-replace.yaml
        admin/pages/batch-find-and-replace.md
