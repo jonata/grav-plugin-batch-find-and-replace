@@ -1,3 +1,9 @@
+# v0.0.3
+## 04/29/2026
+
+1. [](#bugfix)
+    * Fixed README demo embed: GitHub strips raw `<video>` tags, so the demo is now embedded as an animated GIF (`media/demo.gif`) that links to the source MP4. The GIF autoplays in the rendered README on GitHub.
+
 # v0.0.2
 ## 04/29/2026
 

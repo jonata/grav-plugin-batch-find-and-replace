@@ -2,7 +2,7 @@
 
 A Grav CMS admin plugin that lets administrators **find and/or replace** text, exact strings, or PCRE regex patterns across **all** `.md` page files under `user/pages/` — in batch.
 
-<video src="https://github.com/jonata/grav-plugin-batch-find-and-replace/raw/main/media/demo.mp4" autoplay loop muted playsinline controls width="100%"></video>
+[![Demo](media/demo.gif)](media/demo.mp4)
 
 > ⚠️ **WARNING:** This plugin modifies page files directly. Always make a full backup of your `user/pages/` directory before running a replacement. **There is no undo.**
 
