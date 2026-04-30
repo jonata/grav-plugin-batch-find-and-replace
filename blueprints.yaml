@@ -1,7 +1,7 @@
 name: Batch Find and Replace
 slug: batch-find-and-replace
 type: plugin
-version: 0.0.3
+version: 0.0.4
 description: "Batch find and replace tool for Grav pages. Allows administrators to search and replace text, exact strings, or regex patterns across all .md page files."
 icon: search
 author:

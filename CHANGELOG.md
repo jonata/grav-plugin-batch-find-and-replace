@@ -1,3 +1,14 @@
+# v0.0.4
+## 04/30/2026
+
+1. [](#new)
+    * **Multiline Find and Replace.** Both fields are now `<textarea>` inputs that carry real newlines through the form. Patterns can now span multiple lines (literal mode: paste or press Enter; regex mode: write `\R`, `\n`, etc.). Press Ctrl+Enter (Cmd+Enter on macOS) to run.
+    * Server-side scanning rewritten to match against the full file at once via `preg_match_all` with `PREG_OFFSET_CAPTURE`, then map byte offsets to 1-based line numbers via a precomputed line-offset table (binary search, O(log n) per match). Multiline matches are reported with the starting line number and an excerpt covering every line they span.
+1. [](#improved)
+    * During a **Replace all**, the results table is dimmed until the auto-refresh search renders, so it's clear the displayed results are about to update.
+    * Per-row "Replace" buttons are hidden when the find pattern is multiline (the per-row endpoint operates on a single line; only "Replace all" can apply multiline patterns).
+    * `makeExcerpt()` reordered to wrap match highlights **before** collapsing whitespace, so multiline patterns still highlight correctly in the report.
+
 # v0.0.3
 ## 04/29/2026
 

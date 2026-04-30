@@ -135,43 +135,32 @@ class BatchReplaceTool
                 continue;
             }
 
-            $fileMatches = 0;
-            $fileLines   = [];
-            $lines       = preg_split('/\R/u', $contents) ?: [];
-
-            foreach ($lines as $idx => $line) {
-                $count = @preg_match_all($pattern, $line);
-                if ($count === false) {
-                    $this->errors[] = sprintf(
-                        'Pattern error while scanning %s: %s',
-                        $this->relPath($absPath),
-                        preg_last_error_msg()
-                    );
-                    continue 2;
-                }
-                if ($count > 0) {
-                    $fileMatches += $count;
-                    if ($totalLinesShown < $this->maxResults) {
-                        $fileLines[] = [
-                            'line'    => $idx + 1,
-                            'excerpt' => $this->makeExcerpt($line, $pattern),
-                        ];
-                        $totalLinesShown++;
-                    } else {
-                        $this->truncated = true;
-                    }
-                }
+            // Match against the FULL file at once, not line-by-line. This is
+            // what allows multiline patterns (find strings containing real
+            // newline characters, or regexes like `foo\nbar`) to match.
+            $matches = [];
+            $count = @preg_match_all($pattern, $contents, $matches, PREG_OFFSET_CAPTURE);
+            if ($count === false) {
+                $this->errors[] = sprintf(
+                    'Pattern error while scanning %s: %s',
+                    $this->relPath($absPath),
+                    preg_last_error_msg()
+                );
+                continue;
+            }
+            if ($count === 0) {
+                continue;
             }
 
-            if ($fileMatches > 0) {
-                $filesWithHits++;
-                $totalMatches += $fileMatches;
-                $report[] = [
-                    'path'  => $this->relPath($absPath),
-                    'count' => $fileMatches,
-                    'lines' => $fileLines,
-                ];
-            }
+            $fileLines = $this->buildMatchReport($contents, $matches[0], $pattern, $totalLinesShown);
+
+            $filesWithHits++;
+            $totalMatches += $count;
+            $report[] = [
+                'path'  => $this->relPath($absPath),
+                'count' => $count,
+                'lines' => $fileLines,
+            ];
         }
 
         return [
@@ -246,23 +235,12 @@ class BatchReplaceTool
                 continue;
             }
 
-            // Collect line-level report for the user, based on the ORIGINAL file.
-            $fileLines = [];
-            $lines     = preg_split('/\R/u', $original) ?: [];
-            foreach ($lines as $idx => $line) {
-                $lineHits = @preg_match_all($pattern, $line);
-                if ($lineHits > 0) {
-                    if ($totalLinesShown < $this->maxResults) {
-                        $fileLines[] = [
-                            'line'    => $idx + 1,
-                            'excerpt' => $this->makeExcerpt($line, $pattern),
-                        ];
-                        $totalLinesShown++;
-                    } else {
-                        $this->truncated = true;
-                    }
-                }
-            }
+            // Collect line-level report for the user, based on the ORIGINAL
+            // file. Match across the full content (not per-line) so multiline
+            // patterns are reported with their starting line numbers.
+            $matches = [];
+            @preg_match_all($pattern, $original, $matches, PREG_OFFSET_CAPTURE);
+            $fileLines = $this->buildMatchReport($original, $matches[0] ?? [], $pattern, $totalLinesShown);
 
             if (!is_writable($absPath)) {
                 $this->errors[] = 'Cannot write (permission denied): ' . $this->relPath($absPath);
@@ -511,6 +489,107 @@ class BatchReplaceTool
     }
 
     /**
+     * Turn a flat list of `preg_match_all` offset-captures into the per-line
+     * report the UI consumes. For each match we compute the file line number
+     * its first byte falls on and pull a span covering all the lines the
+     * match spans, so multiline matches still get readable context.
+     *
+     * Mutates $totalLinesShown (caller's running total across files) and
+     * sets $this->truncated when $maxResults is exceeded.
+     *
+     * @param string $contents       Full file contents.
+     * @param array  $offsetMatches  $matches[0] from preg_match_all with PREG_OFFSET_CAPTURE.
+     * @param string $pattern        PCRE pattern (delimited/flagged) used for highlighting in the excerpt.
+     * @param int    $totalLinesShown Running total, by reference.
+     * @return array<int, array{line:int, excerpt:string}>
+     */
+    protected function buildMatchReport(string $contents, array $offsetMatches, string $pattern, int &$totalLinesShown): array
+    {
+        if (!$offsetMatches) {
+            return [];
+        }
+        $fileLines   = [];
+        $lineOffsets = $this->buildLineOffsets($contents);
+        $contentsLen = strlen($contents);
+
+        foreach ($offsetMatches as $match) {
+            // PREG_OFFSET_CAPTURE shape: [matchedString, byteOffset]
+            $matchText = (string) $match[0];
+            $offset    = (int)    $match[1];
+
+            $startLine = $this->offsetToLine($offset, $lineOffsets);
+            $endLine   = $this->offsetToLine($offset + strlen($matchText), $lineOffsets);
+
+            $spanStart = $lineOffsets[$startLine - 1] ?? 0;
+            // End of the line that contains the end of the match: the byte
+            // before the next line's start, or EOF for the last line.
+            $spanEnd   = isset($lineOffsets[$endLine])
+                ? max($spanStart, $lineOffsets[$endLine] - 1)
+                : $contentsLen;
+
+            $span = substr($contents, $spanStart, $spanEnd - $spanStart);
+            $span = rtrim($span, "\r"); // trim trailing CR if file is CRLF
+
+            if ($totalLinesShown < $this->maxResults) {
+                $fileLines[] = [
+                    'line'    => $startLine,
+                    'excerpt' => $this->makeExcerpt($span, $pattern),
+                ];
+                $totalLinesShown++;
+            } else {
+                $this->truncated = true;
+                break;
+            }
+        }
+
+        return $fileLines;
+    }
+
+    /**
+     * Build a list of byte offsets where each line starts. Index i (0-based)
+     * holds the start of line i+1 (1-based), so $offsets[0] is always 0.
+     * Treats `\n` as the line separator; a leading `\r` (CRLF) stays at the
+     * end of the previous line, which is what callers want for excerpts.
+     *
+     * @param string $contents
+     * @return array<int, int>
+     */
+    protected function buildLineOffsets(string $contents): array
+    {
+        $offsets = [0];
+        $pos     = 0;
+        while (($pos = strpos($contents, "\n", $pos)) !== false) {
+            $offsets[] = $pos + 1;
+            $pos++;
+        }
+        return $offsets;
+    }
+
+    /**
+     * Map a byte offset to a 1-based line number using a precomputed line
+     * offset table. Binary search keeps this O(log n) per lookup, which
+     * matters when a file has thousands of matches.
+     *
+     * @param int   $offset
+     * @param array<int, int> $lineOffsets
+     * @return int
+     */
+    protected function offsetToLine(int $offset, array $lineOffsets): int
+    {
+        $lo = 0;
+        $hi = count($lineOffsets) - 1;
+        while ($lo < $hi) {
+            $mid = intdiv($lo + $hi + 1, 2);
+            if ($lineOffsets[$mid] <= $offset) {
+                $lo = $mid;
+            } else {
+                $hi = $mid - 1;
+            }
+        }
+        return $lo + 1;
+    }
+
+    /**
      * Make a human-friendly excerpt of a long line. When $pattern is given,
      * wraps each match with the HL_OPEN/HL_CLOSE sentinels so the client can
      * render highlights via <mark> tags. The wrapping happens BEFORE
@@ -522,9 +601,12 @@ class BatchReplaceTool
      */
     protected function makeExcerpt(string $line, ?string $pattern = null): string
     {
-        $line = preg_replace('/\s+/u', ' ', $line) ?? $line;
-        $line = trim($line);
-
+        // Wrap highlights FIRST, while real whitespace (including newlines)
+        // is still intact. Multiline patterns rely on those newlines to match
+        // again here for highlighting; if we collapsed whitespace first, the
+        // pattern would no longer match and nothing would be highlighted. The
+        // sentinels (\x01, \x02) are not whitespace, so the collapse below
+        // leaves them in place.
         if ($pattern !== null && $pattern !== '') {
             $wrapped = @preg_replace_callback(
                 $pattern,
@@ -537,6 +619,9 @@ class BatchReplaceTool
                 $line = $wrapped;
             }
         }
+
+        $line = preg_replace('/\s+/u', ' ', $line) ?? $line;
+        $line = trim($line);
 
         $softLen = 200;   // preferred max length when the first match fits
         $hardLen = 2000;  // absolute cap regardless

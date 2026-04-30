@@ -51,15 +51,26 @@
             display: block; margin-bottom: 6px;
             font-weight: 600; font-size: 13px;
         }
-        .br-form input[type="text"] {
+        .br-form input[type="text"],
+        .br-form textarea {
             width: 100%; padding: 9px 11px; border-radius: 3px;
             border: 1px solid rgba(127,127,127,0.4);
             font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
             font-size: 13px; box-sizing: border-box;
         }
-        .br-form input[type="text"]:focus {
+        .br-form textarea {
+            min-height: 2.6em; line-height: 1.5;
+            resize: vertical; white-space: pre;
+            overflow-x: auto;
+        }
+        .br-form input[type="text"]:focus,
+        .br-form textarea:focus {
             outline: none; border-color: #4ea1ff;
             box-shadow: 0 0 0 2px rgba(78,161,255,0.2);
+        }
+        .br-form-hint {
+            display: block; margin-top: 4px;
+            font-size: 11px; opacity: 0.65; font-weight: 400;
         }
 
         .br-checkboxes {
@@ -236,10 +247,24 @@
             opacity: 0;
         }
 
-        /* Hide the row-replace button + action column when search-only is on */
+        /* Hide the row-replace button + action column when search-only is on,
+           or when the find pattern is multiline (per-row replace is single-
+           line by design — only "Replace all" can handle multiline). */
         .br-search-only-mode table.br-table col.col-action,
         .br-search-only-mode table.br-table th.col-action,
-        .br-search-only-mode table.br-table td.action { display: none !important; }
+        .br-search-only-mode table.br-table td.action,
+        .br-multiline-mode   table.br-table col.col-action,
+        .br-multiline-mode   table.br-table th.col-action,
+        .br-multiline-mode   table.br-table td.action { display: none !important; }
+
+        /* While a Replace all is in flight (the replace request, the brief
+           dwell on the replacement summary, and the auto-refresh search that
+           follows), dim the results table to signal it's about to update. */
+        #br-table-wrap.is-pending {
+            opacity: 0.4;
+            pointer-events: none;
+            transition: opacity 0.25s ease-out;
+        }
 
         .br-error-list {
             background: #fdecec; color: #7a1c1c;
@@ -279,7 +304,8 @@
 
         <div class="br-field">
             <label for="br-find">Find <span style="color:#b91c1c">*</span></label>
-            <input type="text" id="br-find" name="find" autocomplete="off" spellcheck="false" required placeholder="Text or regex pattern (without delimiters)">
+            <textarea id="br-find" name="find" rows="2" autocomplete="off" spellcheck="false" required placeholder="Text or regex pattern (without delimiters). Press Enter for a real newline; Ctrl+Enter to run."></textarea>
+            <small class="br-form-hint">Multiline: press Enter to insert a real newline. Use Ctrl+Enter (or click the buttons) to run.</small>
         </div>
 
         <div class="br-checkboxes">
@@ -299,7 +325,7 @@
 
         <div class="br-field" id="br-replace-field">
             <label for="br-replace">Replace with</label>
-            <input type="text" id="br-replace" name="replace" autocomplete="off" spellcheck="false" placeholder="Leave empty to delete matches">
+            <textarea id="br-replace" name="replace" rows="2" autocomplete="off" spellcheck="false" placeholder="Leave empty to delete matches. Press Enter for a real newline; Ctrl+Enter to run."></textarea>
         </div>
 
         <div class="br-actions" id="br-run-actions">
@@ -355,6 +381,17 @@
         }
         $searchOnly.addEventListener('change', syncReplaceVisibility);
         syncReplaceVisibility();
+
+        // The per-row "Replace" button calls replaceInLine() server-side,
+        // which operates on a single line. Multiline find patterns can't be
+        // matched within one line, so we hide the row buttons in that case
+        // and rely on "Replace all" (which uses full-content preg_replace).
+        function syncMultilineMode() {
+            var multi = /[\r\n]/.test($find.value);
+            document.body.classList.toggle('br-multiline-mode', multi);
+        }
+        $find.addEventListener('input', syncMultilineMode);
+        syncMultilineMode();
 
         function escapeHtml(s) {
             return String(s == null ? '' : s)
@@ -684,6 +721,10 @@
                     'There is no undo. Have you backed up user/pages/?\n\n' +
                     'Press OK to proceed with the replacement.';
                 if (!window.confirm(msg)) { return; }
+                // Fade the table until the auto-refresh search renders.
+                // The recursive run(true) call below clears this in its
+                // own finally block right after the new table is drawn.
+                $tableWrap.classList.add('is-pending');
             }
 
             setBusy(true, searchOnly ? 'Scanning files…' : 'Replacing in files…');
@@ -729,12 +770,26 @@
                 showError(e.message || String(e));
             } finally {
                 setBusy(false, '');
+                $tableWrap.classList.remove('is-pending');
             }
         }
 
         $runBtn.addEventListener('click', function () { run(false); });
         $searchBtn.addEventListener('click', function () { run(true); });
         $form.addEventListener('submit', function (e) { e.preventDefault(); run(false); });
+
+        // Ctrl+Enter (or Cmd+Enter on macOS) inside either textarea triggers
+        // the same action as the visible buttons. Plain Enter inserts a real
+        // newline — that's the whole reason these fields are textareas.
+        function handleCtrlEnter(e) {
+            if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey)) return;
+            e.preventDefault();
+            // If "Search Only" is on (or the user hits the find field), run a
+            // search; otherwise run a replace.
+            run($searchOnly.checked);
+        }
+        $find.addEventListener('keydown', handleCtrlEnter);
+        $replace.addEventListener('keydown', handleCtrlEnter);
     })();
     </script>
 </div>
