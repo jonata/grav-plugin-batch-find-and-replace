@@ -1,3 +1,10 @@
+# v0.0.5
+## 06/23/2026
+
+1. [](#improved)
+    * **Grav 2.0 compatibility.** Added the `compatibility` block to `blueprints.yaml` declaring support for Grav `1.7` and `2.0`, so GPM and the Grav 2.0 migration tool install/import the plugin cleanly. Verified the code runs on PHP 8.3 (the Grav 2.0 minimum) with no deprecation warnings; the plugin uses only admin APIs that are unchanged in Grav 2.0, so no code changes were required.
+    * Updated README compatibility notes (Grav 1.7+ and 2.0; Grav 2.0 requires PHP 8.3+).
+
 # v0.0.4
 ## 04/30/2026
 

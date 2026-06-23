@@ -78,9 +78,9 @@ log_operations: true # log every search/replace to logs/grav.log
 
 ## Compatibility
 
-- Grav CMS **1.7+**
+- Grav CMS **1.7+** and **2.0** — tested against both major versions (declared via the `compatibility` block in `blueprints.yaml`).
 - Grav Admin plugin **1.10+**
-- PHP **8.0+**
+- PHP **8.0+** on Grav 1.7. Grav 2.0 itself requires **PHP 8.3+**; the plugin runs cleanly on 8.3 with no deprecation warnings.
 - No external Composer dependencies.
 
 ## License
